@@ -180,22 +180,38 @@ class IrBlasterManager(private val context: Context) {
      * For TCL testing - send a TCL power off code
      */
     suspend fun sendTclPowerCode(): Boolean {
-        // TCL 75Q750G power code
+        // Complete TCL power toggle code - send as a single 32-bit value
         val tclCode = byteArrayOf(0x57, 0xE3.toByte(), 0x18, 0xE7.toByte())
 
         Log.d(TAG, "Sending TCL power code: 0x57E318E7")
-        return sendCommand(tclCode)
+
+        // Create a properly formatted command with the correct NEC protocol headers
+        val formattedCommand = createNECCommand(tclCode)
+
+        return sendCommand(formattedCommand)
     }
 
-    /**
-     * Debug function for testing multiple codes
-     */
-    /**
-     * Debug function for testing multiple codes with different formats
-     */
-    /**
-     * Debug function for testing multiple codes with different formats
-     */
+    // Create a properly formatted NEC command with correct headers and timing
+    private fun createNECCommand(code: ByteArray): ByteArray {
+        // Create a command with NEC protocol markers and proper timing
+        val command = ByteArray(10 + code.size)
+
+        // Header with proper NEC protocol information
+        command[0] = 0x01  // NEC protocol marker
+        command[1] = 0x00  // Frequency MSB (38kHz = 38)
+        command[2] = 0x26  // Frequency LSB
+        command[3] = 0x00  // Repeat count (0 = no repeat)
+        command[4] = 0x01  // Command format (1 = standard)
+
+        // Include the complete 32-bit code with proper NEC format
+        System.arraycopy(code, 0, command, 5, code.size)
+
+        // Add trailing byte to indicate it's a 32-bit code
+        command[9] = 0x20  // 32 bits
+
+        return command
+    }
+
     /**
      * Debug function for testing multiple codes with different formats
      */
@@ -252,88 +268,6 @@ class IrBlasterManager(private val context: Context) {
     }
 
     /**
-     * Create a formatted IR code with all necessary timing information
-     */
-    private fun createFormattedCode(code: ByteArray, frequency: Int): ByteArray {
-        // Standard NEC format has:
-        // - 9ms leading pulse, 4.5ms leading space
-        // - 560µs pulse for bit 0, 560µs space
-        // - 560µs pulse for bit 1, 1690µs space
-
-        // Header with protocol and frequency
-        val header = byteArrayOf(
-            0x01, // NEC protocol
-            (frequency shr 8).toByte(),
-            frequency.toByte(),
-            0x00,
-            code.size.toByte() // Length of the code in bytes
-        )
-
-        return header + code
-    }
-
-    /**
-     * Create a formatted IR code with all necessary timing information
-     */
-    private fun createFormattedCode(code: ByteArray, frequency: Int): ByteArray {
-        // Standard NEC format has:
-        // - 9ms leading pulse, 4.5ms leading space
-        // - 560µs pulse for bit 0, 560µs space
-        // - 560µs pulse for bit 1, 1690µs space
-
-        // Header with protocol and frequency
-        val header = byteArrayOf(
-            0x01, // NEC protocol
-            (frequency shr 8).toByte(),
-            frequency.toByte(),
-            0x00,
-            0x04 // 4 bytes of data
-        )
-
-        return header + code
-    }
-
-    /**
-     * For TCL 55S405TKAA model - try multiple approaches
-     */
-    suspend fun send55S405TkaaPowerCode(): Boolean {
-        try {
-            // Try multiple ways of sending the same code
-
-            // Method 1: Raw byte array
-            val rawCode = byteArrayOf(0x57, 0xE3.toByte(), 0x18, 0xE7.toByte())
-            var success = sendCommand(rawCode)
-            if (success) return true
-
-            delay(500)
-
-            // Method 2: Try repeating the code multiple times
-            repeat(3) {
-                success = sendCommand(rawCode)
-                if (success) return true
-                delay(300)
-            }
-
-            delay(500)
-
-            // Method 3: Try with longer pulse/space timings
-            val pulseModifiedCode = byteArrayOf(
-                0xA0.toByte(), // Custom format marker
-                38.toByte(),   // 38kHz
-                0x02, 0x00,    // 512µs pulse (longer)
-                0x06, 0x00,    // 1536µs space (longer)
-                0x57, 0xE3.toByte(), 0x18, 0xE7.toByte() // The code
-            )
-            success = sendCommand(pulseModifiedCode)
-
-            return success
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in send55S405TkaaPowerCode: ${e.message}")
-            return false
-        }
-    }
-
-    /**
      * Alternative implementation with timing patterns
      */
     suspend fun send75Q750GPowerCode(): Boolean {
@@ -345,7 +279,6 @@ class IrBlasterManager(private val context: Context) {
         const val ACTION_USB_PERMISSION = "com.geekiestgeek.universaltvoff.USB_PERMISSION"
         const val TIMEOUT = 5000 // ms
     }
-
 
     suspend fun sendCommandWithTiming(command: ByteArray, frequency: Int, pulse: Int, space: Int): Boolean {
         // Format command with specific timing

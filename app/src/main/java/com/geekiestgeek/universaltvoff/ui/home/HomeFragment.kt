@@ -1,5 +1,6 @@
 package com.geekiestgeek.universaltvoff.ui.home
 
+import android.app.AlertDialog
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -133,73 +134,55 @@ class HomeFragment : Fragment(), MainActivity.HomeFragmentListener {
 
         lifecycleScope.launch {
             try {
-                // Try multiple variations with delays between each
-                val testMethods = listOf(
-                    "Direct code" to {
-                        progressText.text = "SENDING DIRECT POWER CODE..."
-                        irBlasterManager.sendTclPowerCode()
-                    },
-                    "Multiple codes" to {
-                        progressText.text = "TRYING MULTIPLE CODES..."
-                        irBlasterManager.debugTclPowerCodes()
-                    },
-                    "55S405 specific" to {
-                        progressText.text = "TRYING 55S405 SPECIFIC CODES..."
-                        irBlasterManager.send55S405TkaaPowerCode()
-                    },
-                    "Repeating sequence" to {
-                        progressText.text = "TRYING REPEATED SEQUENCE..."
-                        var result = false
-                        repeat(5) {
-                            val success = irBlasterManager.sendTclPowerCode()
-                            if (success) result = true
-                            delay(200)
-                        }
-                        result
-                    }
-                )
+                // Try direct method first
+                progressText.text = "SENDING DIRECT POWER CODE..."
+                var success = irBlasterManager.sendTclPowerCode()
 
-                var overallSuccess = false
+                if (success) {
+                    handleTestSuccess("Direct code")
+                } else {
+                    progressText.text = "Failed with direct code. Trying multiple codes..."
+                    delay(1000)
 
-                // Try each method with feedback
-                for ((name, method) in testMethods) {
-                    Toast.makeText(requireContext(), "Trying: $name", Toast.LENGTH_SHORT).show()
-
-                    val success = method()
+                    // Try multiple codes
+                    progressText.text = "TRYING MULTIPLE CODES..."
+                    success = irBlasterManager.debugTclPowerCodes()
 
                     if (success) {
-                        statusText.text = "SUCCESS WITH: $name!"
-                        progressText.text = "CHECK IF TV RESPONDED"
-                        overallSuccess = true
-                        delay(3000)  // Pause to see if TV responds
-
-                        // Ask user if TV responded
-                        activity?.runOnUiThread {
-                            val builder = AlertDialog.Builder(requireContext())
-                            builder.setTitle("Did the TV respond?")
-                                .setMessage("Did you see the TV turn off or on?")
-                                .setPositiveButton("Yes") { _, _ ->
-                                    statusText.text = "SUCCESS! TV RESPONDED TO $name"
-                                    progressText.text = "Test completed successfully."
-                                }
-                                .setNegativeButton("No") { _, _ ->
-                                    // Continue with next method
-                                    statusText.text = "TV DID NOT RESPOND TO $name"
-                                    progressText.text = "Continuing with next method..."
-                                }
-                                .show()
-                        }
-
-                        delay(5000)  // Wait for user response
+                        handleTestSuccess("Multiple codes")
                     } else {
-                        progressText.text = "Failed with $name. Trying next..."
+                        progressText.text = "Failed with multiple codes. Trying specific code..."
                         delay(1000)
-                    }
-                }
 
-                if (!overallSuccess) {
-                    statusText.text = "ALL METHODS FAILED"
-                    progressText.text = "TRY MOVING IR BLASTER CLOSER TO TV"
+                        // Try 55S405 specific
+                        progressText.text = "TRYING 55S405 SPECIFIC CODES..."
+                        success = irBlasterManager.send55S405TkaaPowerCode()
+
+                        if (success) {
+                            handleTestSuccess("55S405 specific")
+                        } else {
+                            progressText.text = "Trying repeated sequence..."
+                            delay(1000)
+
+                            // Try repeating sequence
+                            progressText.text = "TRYING REPEATED SEQUENCE..."
+                            var repeatedSuccess = false
+
+                            repeat(5) {
+                                val result = irBlasterManager.sendTclPowerCode()
+                                if (result) repeatedSuccess = true
+                                delay(200)
+                            }
+
+                            if (repeatedSuccess) {
+                                handleTestSuccess("Repeating sequence")
+                            } else {
+                                // All methods failed
+                                statusText.text = "ALL METHODS FAILED"
+                                progressText.text = "TRY MOVING IR BLASTER CLOSER TO TV"
+                            }
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 statusText.text = "ERROR: ${e.message}"
@@ -207,6 +190,30 @@ class HomeFragment : Fragment(), MainActivity.HomeFragmentListener {
                 Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    private suspend fun handleTestSuccess(methodName: String) {
+        statusText.text = "SUCCESS WITH: $methodName!"
+        progressText.text = "CHECK IF TV RESPONDED"
+        delay(3000)  // Pause to see if TV responds
+
+        // Ask user if TV responded
+        activity?.runOnUiThread {
+            val builder = AlertDialog.Builder(requireContext())
+            builder.setTitle("Did the TV respond?")
+                .setMessage("Did you see the TV turn off or on?")
+                .setPositiveButton("Yes") { _, _ ->
+                    statusText.text = "SUCCESS! TV RESPONDED TO $methodName"
+                    progressText.text = "Test completed successfully."
+                }
+                .setNegativeButton("No") { _, _ ->
+                    statusText.text = "TV DID NOT RESPOND TO $methodName"
+                    progressText.text = "Try moving the IR blaster closer to the TV."
+                }
+                .show()
+        }
+
+        delay(5000)  // Wait for user response
     }
 
     private fun startTransmission() {
