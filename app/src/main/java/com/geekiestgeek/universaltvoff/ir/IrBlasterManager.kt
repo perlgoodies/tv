@@ -159,6 +159,8 @@ class IrBlasterManager(private val context: Context) {
         }
 
         try {
+            Log.d(TAG, "Sending command: ${command.joinToString(", ") { "0x" + it.toInt().and(0xFF).toString(16) }}")
+
             val result = usbConnection!!.bulkTransfer(
                 usbEndpoint,
                 command,
@@ -166,6 +168,7 @@ class IrBlasterManager(private val context: Context) {
                 TIMEOUT
             )
 
+            Log.d(TAG, "Command result: $result")
             return@withContext result >= 0
         } catch (e: Exception) {
             Log.e(TAG, "Error sending command: ${e.message}")
@@ -187,20 +190,147 @@ class IrBlasterManager(private val context: Context) {
     /**
      * Debug function for testing multiple codes
      */
+    /**
+     * Debug function for testing multiple codes with different formats
+     */
+    /**
+     * Debug function for testing multiple codes with different formats
+     */
+    /**
+     * Debug function for testing multiple codes with different formats
+     */
     suspend fun debugTclPowerCodes(): Boolean {
-        // Just test a few common codes
-        val codes = listOf(
-            byteArrayOf(0x57, 0xE3.toByte(), 0x18, 0xE7.toByte()),
-            byteArrayOf(0x40, 0xBF.toByte(), 0x38, 0xC7.toByte()),
-            byteArrayOf(0x10, 0xEF.toByte(), 0x38, 0xC7.toByte())
+        // Common formats of IR signals for TCL TVs
+        val formats = listOf(
+            Triple("NEC standard", 38, byteArrayOf(0x57, 0xE3.toByte(), 0x18, 0xE7.toByte())),
+            Triple("NEC variant 1", 36, byteArrayOf(0x57, 0xE3.toByte(), 0x18, 0xE7.toByte())),
+            Triple("NEC variant 2", 40, byteArrayOf(0x57, 0xE3.toByte(), 0x18, 0xE7.toByte())),
+            Triple("TCL specific", 38, byteArrayOf(0x57, 0xE3.toByte(), 0x04, 0xFB.toByte())),
+            Triple("Roku TV format", 38, byteArrayOf(0xEA.toByte(), 0xC7.toByte(), 0x10, 0xEF.toByte())),
+            Triple("Common toggle", 38, byteArrayOf(0x20, 0xDF.toByte(), 0x10, 0xEF.toByte()))
         )
 
-        for (code in codes) {
-            if (sendCommand(code)) return true
+        for ((name, frequency, code) in formats) {
+            Log.d(TAG, "Trying $name at ${frequency}kHz")
+
+            // Create format with custom timing
+            val formattedCode = formatIrSignal(code, frequency)
+
+            // Send the code
+            val success = sendCommand(formattedCode)
+
+            if (success) {
+                Log.d(TAG, "Success with $name")
+                return true
+            }
+
             delay(1000)
         }
 
         return false
+    }
+
+    /**
+     * Create a formatted IR code with all necessary timing information
+     */
+    private fun formatIrSignal(code: ByteArray, frequency: Int): ByteArray {
+        // Standard NEC format has:
+        // - 9ms leading pulse, 4.5ms leading space
+        // - 560µs pulse for bit 0, 560µs space
+        // - 560µs pulse for bit 1, 1690µs space
+
+        // Header with protocol and frequency
+        val header = byteArrayOf(
+            0x01, // NEC protocol
+            (frequency shr 8).toByte(),
+            frequency.toByte(),
+            0x00,
+            code.size.toByte() // Length of the code in bytes
+        )
+
+        return header + code
+    }
+
+    /**
+     * Create a formatted IR code with all necessary timing information
+     */
+    private fun createFormattedCode(code: ByteArray, frequency: Int): ByteArray {
+        // Standard NEC format has:
+        // - 9ms leading pulse, 4.5ms leading space
+        // - 560µs pulse for bit 0, 560µs space
+        // - 560µs pulse for bit 1, 1690µs space
+
+        // Header with protocol and frequency
+        val header = byteArrayOf(
+            0x01, // NEC protocol
+            (frequency shr 8).toByte(),
+            frequency.toByte(),
+            0x00,
+            code.size.toByte() // Length of the code in bytes
+        )
+
+        return header + code
+    }
+
+    /**
+     * Create a formatted IR code with all necessary timing information
+     */
+    private fun createFormattedCode(code: ByteArray, frequency: Int): ByteArray {
+        // Standard NEC format has:
+        // - 9ms leading pulse, 4.5ms leading space
+        // - 560µs pulse for bit 0, 560µs space
+        // - 560µs pulse for bit 1, 1690µs space
+
+        // Header with protocol and frequency
+        val header = byteArrayOf(
+            0x01, // NEC protocol
+            (frequency shr 8).toByte(),
+            frequency.toByte(),
+            0x00,
+            0x04 // 4 bytes of data
+        )
+
+        return header + code
+    }
+
+    /**
+     * For TCL 55S405TKAA model - try multiple approaches
+     */
+    suspend fun send55S405TkaaPowerCode(): Boolean {
+        try {
+            // Try multiple ways of sending the same code
+
+            // Method 1: Raw byte array
+            val rawCode = byteArrayOf(0x57, 0xE3.toByte(), 0x18, 0xE7.toByte())
+            var success = sendCommand(rawCode)
+            if (success) return true
+
+            delay(500)
+
+            // Method 2: Try repeating the code multiple times
+            repeat(3) {
+                success = sendCommand(rawCode)
+                if (success) return true
+                delay(300)
+            }
+
+            delay(500)
+
+            // Method 3: Try with longer pulse/space timings
+            val pulseModifiedCode = byteArrayOf(
+                0xA0.toByte(), // Custom format marker
+                38.toByte(),   // 38kHz
+                0x02, 0x00,    // 512µs pulse (longer)
+                0x06, 0x00,    // 1536µs space (longer)
+                0x57, 0xE3.toByte(), 0x18, 0xE7.toByte() // The code
+            )
+            success = sendCommand(pulseModifiedCode)
+
+            return success
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in send55S405TkaaPowerCode: ${e.message}")
+            return false
+        }
     }
 
     /**
@@ -214,5 +344,77 @@ class IrBlasterManager(private val context: Context) {
     companion object {
         const val ACTION_USB_PERMISSION = "com.geekiestgeek.universaltvoff.USB_PERMISSION"
         const val TIMEOUT = 5000 // ms
+    }
+
+
+    suspend fun sendCommandWithTiming(command: ByteArray, frequency: Int, pulse: Int, space: Int): Boolean {
+        // Format command with specific timing
+        val formattedCommand = formatCommandWithTiming(command, frequency, pulse, space)
+        return sendCommand(formattedCommand)
+    }
+
+    /**
+     * Format a command with specific timing parameters
+     */
+    private fun formatCommandWithTiming(command: ByteArray, frequency: Int, pulse: Int, space: Int): ByteArray {
+        // Custom format with explicit timing
+        val result = ByteArray(command.size + 6)
+
+        // Header with timing information
+        result[0] = 0xA0.toByte() // Custom header
+        result[1] = frequency.toByte()
+        result[2] = (pulse shr 8).toByte()
+        result[3] = (pulse and 0xFF).toByte()
+        result[4] = (space shr 8).toByte()
+        result[5] = (space and 0xFF).toByte()
+
+        // Copy the command data
+        System.arraycopy(command, 0, result, 6, command.size)
+
+        return result
+    }
+
+    suspend fun send55S405TkaaPowerCode(): Boolean {
+        // Standard TCL power code
+        val tclCode = byteArrayOf(0x57, 0xE3.toByte(), 0x18, 0xE7.toByte())
+
+        Log.d(TAG, "Sending TCL 55S405TKAA power code: 0x57E318E7")
+
+        // Try multiple formats to increase chances of success
+        try {
+            // Format 1: Standard NEC format
+            val format1 = byteArrayOf(
+                0x01, // NEC protocol
+                0x00, 0x26, // 38kHz frequency (38000Hz >> 8, 38000Hz & 0xFF)
+                0x00, 0x04, // 4 bytes length
+                0x57, 0xE3.toByte(), 0x18, 0xE7.toByte() // The code itself
+            )
+
+            // Send the first format
+            val result1 = sendCommand(format1)
+            if (result1) return true
+
+            delay(500)
+
+            // Format 2: Raw format with timing data
+            val format2 = byteArrayOf(
+                0xA1.toByte(), // Raw format marker
+                0x26, // 38kHz in 0.1kHz units
+                0x00, 0x02, // 2 repeats
+                0x57, 0xE3.toByte(), 0x18, 0xE7.toByte() // The code itself
+            )
+
+            // Send the second format
+            val result2 = sendCommand(format2)
+            if (result2) return true
+
+            delay(500)
+
+            // Format 3: Just the hex code itself as a last resort
+            return sendCommand(tclCode)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending 55S405TKAA code: ${e.message}")
+            return false
+        }
     }
 }

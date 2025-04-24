@@ -19,6 +19,7 @@ import com.geekiestgeek.universaltvoff.ui.manufacturers.ManufacturersFragment
 import com.geekiestgeek.universaltvoff.ui.settings.SettingsFragment
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 class HomeFragment : Fragment(), MainActivity.HomeFragmentListener {
 
@@ -120,45 +121,90 @@ class HomeFragment : Fragment(), MainActivity.HomeFragmentListener {
             return
         }
 
-        // Show testing status
-        statusText.text = "Testing TCL 75Q750G codes..."
+        // Show testing status with a Toast for visibility
+        statusText.text = "TESTING TCL 55S405TKAA..."
+        statusText.textSize = 18f
+
         progressText.visibility = View.VISIBLE
-        progressText.text = "Sending test codes..."
+        progressText.text = "Starting test sequence..."
+        progressText.textSize = 16f
+
+        Toast.makeText(requireContext(), "Starting TCL code test sequence", Toast.LENGTH_LONG).show()
 
         lifecycleScope.launch {
             try {
-                // First try the direct TCL power code
-                progressText.text = "Sending direct power code..."
-                var success = irBlasterManager.sendTclPowerCode()
+                // Try multiple variations with delays between each
+                val testMethods = listOf(
+                    "Direct code" to {
+                        progressText.text = "SENDING DIRECT POWER CODE..."
+                        irBlasterManager.sendTclPowerCode()
+                    },
+                    "Multiple codes" to {
+                        progressText.text = "TRYING MULTIPLE CODES..."
+                        irBlasterManager.debugTclPowerCodes()
+                    },
+                    "55S405 specific" to {
+                        progressText.text = "TRYING 55S405 SPECIFIC CODES..."
+                        irBlasterManager.send55S405TkaaPowerCode()
+                    },
+                    "Repeating sequence" to {
+                        progressText.text = "TRYING REPEATED SEQUENCE..."
+                        var result = false
+                        repeat(5) {
+                            val success = irBlasterManager.sendTclPowerCode()
+                            if (success) result = true
+                            delay(200)
+                        }
+                        result
+                    }
+                )
 
-                if (!success) {
-                    // If that failed, try the debug function with multiple codes
-                    progressText.text = "Trying debug power codes..."
-                    success = irBlasterManager.debugTclPowerCodes()
+                var overallSuccess = false
+
+                // Try each method with feedback
+                for ((name, method) in testMethods) {
+                    Toast.makeText(requireContext(), "Trying: $name", Toast.LENGTH_SHORT).show()
+
+                    val success = method()
+
+                    if (success) {
+                        statusText.text = "SUCCESS WITH: $name!"
+                        progressText.text = "CHECK IF TV RESPONDED"
+                        overallSuccess = true
+                        delay(3000)  // Pause to see if TV responds
+
+                        // Ask user if TV responded
+                        activity?.runOnUiThread {
+                            val builder = AlertDialog.Builder(requireContext())
+                            builder.setTitle("Did the TV respond?")
+                                .setMessage("Did you see the TV turn off or on?")
+                                .setPositiveButton("Yes") { _, _ ->
+                                    statusText.text = "SUCCESS! TV RESPONDED TO $name"
+                                    progressText.text = "Test completed successfully."
+                                }
+                                .setNegativeButton("No") { _, _ ->
+                                    // Continue with next method
+                                    statusText.text = "TV DID NOT RESPOND TO $name"
+                                    progressText.text = "Continuing with next method..."
+                                }
+                                .show()
+                        }
+
+                        delay(5000)  // Wait for user response
+                    } else {
+                        progressText.text = "Failed with $name. Trying next..."
+                        delay(1000)
+                    }
                 }
 
-                if (!success) {
-                    // Try the specialized 75Q750G code with different timings
-                    progressText.text = "Trying specialized timing patterns..."
-                    success = irBlasterManager.send75Q750GPowerCode()
-                }
-
-                if (success) {
-                    statusText.text = "Successfully sent TCL power code!"
-                    progressText.text = "TV should have responded."
-                } else {
-                    statusText.text = "Failed to send any working TCL code"
-                    progressText.text = "Please check IR blaster placement and try again"
+                if (!overallSuccess) {
+                    statusText.text = "ALL METHODS FAILED"
+                    progressText.text = "TRY MOVING IR BLASTER CLOSER TO TV"
                 }
             } catch (e: Exception) {
-                statusText.text = "Error: ${e.message}"
-                progressText.text = "Exception during code test"
-            }
-
-            // Hide progress text after a delay
-            kotlinx.coroutines.delay(5000)
-            if (isAdded) {
-                progressText.visibility = View.GONE
+                statusText.text = "ERROR: ${e.message}"
+                progressText.text = "EXCEPTION DURING TEST"
+                Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
