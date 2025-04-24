@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/homeFragment">
+
+    <fragment
+        android:id="@+id/homeFragment"
+        android:name="com.geekiestgeek.universaltvoff.ui.home.HomeFragment"
+        android:label="Home"
+        tools:layout="@layout/fragment_home" />
+
+    <fragment
+        android:id="@+id/manufacturersFragment"
+        android:name="com.geekiestgeek.universaltvoff.ui.manufacturers.ManufacturersFragment"
+        android:label="Manufacturers"
+        tools:layout="@layout/fragment_manufacturers" />
+
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.geekiestgeek.universaltvoff.ui.settings.SettingsFragment"
+        android:label="Settings"
+        tools:layout="@layout/fragment_settings" />
+
+    <fragment
+        android:id="@+id/aboutFragment"
+        android:name="com.geekiestgeek.universaltvoff.ui.about.AboutFragment"
+        android:label="About"
+        tools:layout="@layout/fragment_about" />
+
+</navigation>

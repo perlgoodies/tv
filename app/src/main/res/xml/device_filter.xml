@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Typical USB-C IR blaster vendor/product IDs - update with your specific device IDs -->
+    <usb-device vendor-id="1A86" product-id="7523" />  <!-- Common CH340 Serial Converter -->
+    <usb-device vendor-id="0403" product-id="6001" />  <!-- FTDI FT232 -->
+    <usb-device vendor-id="10C4" product-id="EA60" />  <!-- CP210x UART Bridge -->
+    <usb-device vendor-id="067B" product-id="2303" />  <!-- Prolific PL2303 -->
+    <!-- Generic IR blasters - catch-all -->
+    <usb-device vendor-id="1234" product-id="5678" />
+</resources>
